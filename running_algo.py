@@ -1,160 +1,209 @@
-import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 import plotly.graph_objs as go
-from running_algo import *
-import pandas as pd
-from group_functions import *
-from sub_super_script import *
 from html_utils import *
-from std_mean_ratio_method import *
-from range_method import *
-from formatting import *
-from init_html import *
-from get_unit_check import *
 from plot_diurnal import *
-from numbers_to_strings import *
+import csv
+import matplotlib.pyplot as plt
+import matplotlib.lines as mlines
+import matplotlib.pyplot as plt
 
-
-def clean_MAD_outlier_running(df_temp,local_df, col):
-    true_df = local_df.copy(deep=True)
-    df_nan = df_temp[df_temp[col+'_clean'].notna()]
-    import copy
-    seq = df_nan[col+'_clean'].to_numpy()
-    seq2 = copy.deepcopy(seq)
-    days =1
-    hours = 24*days
-#     window_size = 1*4*hours
-    window_size = 3
-    nan_window_size = int(window_size/2)
-
-    for i in range(len(seq) - window_size + 1):
-        arr = (seq[i: i + window_size]) #getting 24 hour window
-
-        (seq2[i: i + window_size]) = outlier_mad(arr)[0]
-
-    df_nan = df_nan[[col, "dates"]].copy()
-    df_nan[col+'_clean_outliers'] = seq2
-    df_nan
-
-    t1 = true_df.copy(deep=True)
-    t1.set_index(['dates'],inplace=True)
-    t2 =df_nan
-    t2.set_index(['dates'],inplace=True)
-
-
-
-    df3 = pd.concat([t1,t2],axis=1)
-    df3 = df3.reset_index(drop=True)
-    df3['dates'] = local_df['dates']
-
-
-
-    return df3
-
-def outlier_mad(arr):
+def convert_to_micro(local_df):
     """
-    Here arr is the 24 hour window values
+    Converts all nitrogen oxide in standard unit formats, assuming that NO2 and NO are in ppb and not in µg/m³
+    Air Pollutant       	     Conversion Factor	Molecular Weight
+    Nitric oxide (NO)	        1 ppb = 1.23 µg/m3  	30.01 g/mol
+    Nitrogen dioxide (NO2)  	1 ppb = 1.88 µg/m3	    46.01 g/mol
 
     """
-    med = np.nanmedian(arr, axis = 0)
-    mad = np.nanmedian(np.absolute(arr - np.nanmedian(arr)))
-    threshold = 3.5
-    outlier = []
-    clean = []
-    index=0
-
-    for i, v in enumerate(arr):
-        t = (v-med)/mad
-        if (t) > threshold:
-            outlier.append(arr[i])
-            clean.append(np.nan)
-        else:
-            clean.append(arr[i])
-            continue
-
-    return clean, len(outlier)
-def rolling_remove_consecutives(local_df, col):
-    true_df = local_df.copy(deep=True)
-    df_nan = local_df[local_df[col].notna()]
-    if col == 'SO2':
-        days = 7
-    if col == 'Ozone':
-        days = 2
-    else:
-        days = 1
-
-    hours = 24*days
-    window_size = 1*4*hours
-
-    nan_window_size = int(window_size/2)
-    # df_nan['temp'] =  np.where(df_nan[col] <= 1, df_nan[col] + 1 , df_nan[col])
-    df_nan['temp'] =  df_nan[col] + 1
-    seq = df_nan['temp'].to_numpy()
-    ratio = []
-    for i in range(len(seq) - window_size + 1):
-        arr = (seq[i: i + window_size]) #getting 24 hour window
-        t = np.nanstd(arr)/ np.nanmean(arr)
-        ratio.extend([t])
-
-    ratio = np.concatenate((np.asarray([[np.nan]*nan_window_size]), ratio), axis=None)
-    len_x = len(df_nan) - len(ratio)
-    ratio = np.concatenate(( ratio, np.asarray([[np.nan]*len_x]))  , axis=None)
-
-    df = pd.DataFrame()
-    df[col] = df_nan[col]
-    df['dates'] = df_nan['dates']
-    df["ratio"] = ratio
-    df[col + '_clean']= np.where(df['ratio'] <= 0.1, np.nan, df[col])
-    del df["ratio"]
-    del df[col]
-
-    t1 = local_df.copy(deep=True)
-    t1.set_index(['dates'],inplace=True)
-    t2 =df
-    t2.set_index(['dates'],inplace=True)
+    local_df['NO2_std'] = local_df['NO2_clean_outliers']*1.88
+    local_df['NO_std'] =  local_df['NO_clean_outliers'] *1.23
+    local_df['NOx_std'] =  local_df['NOx_clean_outliers']
+    return local_df
 
 
+def retain_as_micro(local_df):
+    """
+    Retains all nitrogen oxide in standard unit formats
+    Air Pollutant       	     Conversion Factor	Molecular Weight
+    Nitric oxide (NO)	        1 ppb = 1.23 µg/m3  	30.01 g/mol
+    Nitrogen dioxide (NO2)  	1 ppb = 1.88 µg/m3	    46.01 g/mol
 
-    df3 = pd.concat([t1,t2],axis=1)
-    df3 = df3.reset_index(drop=True)
-    df3['dates'] = local_df['dates']
+    """
+    local_df['NO2_std'] = local_df['NO2_clean_outliers']
+    local_df['NO_std'] =  local_df['NO_clean_outliers']
+    local_df['NOx_std'] =  local_df['NOx_clean_outliers']
+    return local_df
+
+def unit_class(x):
+    """
+    assign key as blue, red, violet or yellow to each row of data
+    blue:  As per CPCB norms
+
+    red 	    ppb	    ppb	    ppb
+    blue	    µg m-3	µg m-3	ppb
+    violet	    µg m-3	ppb	    µg m-3
+    otherwise   (retained without any changes)
+
+    """
+    if (x > 1.2):return 'blue'
+    elif (x >0.9):return 'red'
+    elif (x >0.5):return 'violet'
+    else:return 'yellow'
+
+def convert_cluster_wise(local_df):
+    """
+    assign values as per key as blue, red, violet or yellow to each row of data
+
+    """
+    local_df['NO_std'] = local_df['NO_clean']
+    local_df['NO2_std'] = local_df['NO2_clean']
+    local_df['NOx_std'] = local_df['NOx_clean']
+
+    local_df.loc[local_df['score'] == 'red', 'NO_std'] = local_df['NO_clean']*1.23
+    local_df.loc[local_df['score'] == 'red', 'NO2_std'] = local_df['NO2_clean']*1.88
+    local_df.loc[local_df['score'] == 'red', 'NOx_std'] = local_df['NO2_clean'] + local_df['NO_clean']
+
+    local_df.loc[local_df['score'] == 'violet', 'NO_std'] = local_df['NO_clean']*1.23
+    local_df.loc[local_df['score'] == 'violet', 'NO2_std'] = local_df['NO2_clean']
+    local_df.loc[local_df['score'] == 'violet', 'NOx_std'] = (local_df['NO2_clean']/1.88) + (local_df['NO_clean'])
+
+
+    local_df.loc[local_df['score'] == 'blue', 'NO_std'] = local_df['NO_clean']
+    local_df.loc[local_df['score'] == 'blue', 'NO2_std'] = local_df['NO2_clean']
+    local_df.loc[local_df['score'] == 'blue', 'NOx_std'] = (local_df['NOx_clean'])
+
+    return local_df
+
+
+def outlier_treatment(datacolumn):
+    #  sorted(datacolumn)
+    """
+    Provides IQR range to remove the outliers closer to the minimum value of the dataset
+    """
+    Q1,Q3 = np.nanpercentile(datacolumn , [25,75])
+    IQR = Q3 - Q1
+    lower_range = Q1 - (1.5 * IQR)
+    upper_range = Q3 + (1.5 * IQR)
+    return lower_range,upper_range
+
+
+def find_local_outliers(local_df, col):
+    """
+    Finds outlier by running a 3 hour window (3*4 15 mins data)
+    Median Absolute Deviation (MAD) = (value - rolling window median)
+
+    t = |(value - rolling window median) / MAD|
+
+    t > 3.5 --> removed as outliers
+
+    """
+    unchanged = local_df.copy(deep = True)
+    local_df[col + '_clean_outliers'] = local_df[col+'_clean']
+    local_df[col+'_int'] = interpolate_gaps(local_df[col].to_numpy(), limit= 2)
+    local_df["med"] = local_df.groupby("StationId")[col+'_int'].rolling(window = 4*3, min_periods = 1).median().values
+    local_df["med_2"] = (local_df[col+'_int'] - local_df["med"]).abs()
+    local_df["mad"] = local_df.groupby("StationId")["med_2"].rolling(window = 4*3, min_periods = 1).median().values
+    local_df["t"] = ((local_df[col]-local_df["med"]) / local_df["mad"]).abs()
+    local_df[col+'_clean_outliers'].mask(local_df['t'] > 3.5, np.nan, inplace=True)
+    local_df[col + '_clean_outliers'].mask(local_df[col] < outlier_treatment(local_df[col])[0], np.nan, inplace=True)
+
+    for k, v in local_df.groupby((local_df[col].shift() != local_df[col]).cumsum()):
+        if (len(v[col ]) >= 4) == True:
+            v[col + '_clean_outliers'] = np.nan
+    unchanged[col + '_clean_outliers']= local_df[col + '_clean_outliers']
+    return unchanged
+
+def find_repeats(local_df, col):
+    """
+    Finds repeats by running a 24 hour window (24*4 15 mins data)
+    Co-efficient of Variance = Standard deviation / Mean
+
+    t > 0.1 --> removed as repeats
+    """
+    unchanged = local_df.copy(deep = True)
+    local_df[col+'clean'] = local_df[col]
+    try:
+        local_df[col+'_int'] = interpolate_gaps(local_df[col].to_numpy(), limit= 2)
+    except:
+        local_df[col+'_int'] = local_df[col]
+        pass
+    local_df[col+'_int'] = local_df[col+'_int'] +1
+    local_df["med"] = local_df.groupby("StationId")[col+'_int'].rolling(window = 4*24*2, min_periods = 1).mean().values
+    local_df["std"] = local_df.groupby("StationId")[col+'_int'].rolling(window = 4*24*2, min_periods = 1).std().values
+    local_df["t"] = (local_df["std"]/local_df['med'])
+    local_df[col+'clean'].mask(local_df['t'] < 0.1, np.nan, inplace=True)
+    unchanged[col+'_clean'] = local_df[col+'clean']
+#     print(local_df)
+    return unchanged
+
+def interpolate_gaps(values, limit=None):
+    """
+    Fill gaps using linear interpolation, optionally only fill gaps up to a
+    size of `limit`.
+    """
+    values = np.asarray(values)
+    i = np.arange(values.size)
+    valid = np.isfinite(values)
+    filled = np.interp(i, i[valid], values[valid])
+
+    if limit is not None:
+        invalid = ~valid
+        for n in range(1, limit+1):
+            invalid[:-n] &= invalid[n:]
+        filled[invalid] = np.nan
+
+    return filled
+
+
+def find_abs_rep(local_df, col, filename):
+
+    """
+    Finds absolute repeats by running a 1 hour window (1*4 15 mins data) by grouping 4 continuous constant records
+
+    """
+    unchanged = local_df.copy(deep = True)
+
+    ar1 = interpolate_gaps(local_df[col].to_numpy(), limit=2)
+    local_df[col + '_ab_rep'] = ar1
+    values_repeats = []
+    count_repeats = []
+    starttime = []
+    endtime = []
+    for k, v in local_df.groupby((local_df[col + '_ab_rep'].shift() != local_df[col + '_ab_rep']).cumsum()):
+        if (len(v[col + '_ab_rep']) >= 4) == True:
+            values_repeats.append(v[col].iloc[-1].item())
+            count_repeats.append(len(v[col + '_ab_rep']))
+            starttime.append(v['dates'].iloc[0])
+            endtime.append(v['dates'].iloc[-1])
+            local_df['hint'] = local_df.dates.between((v['dates'].iloc[0]), (v['dates'].iloc[-1]))
+            local_df[col + '_ab_rep'] = np.where(local_df['hint'] == True, np.nan, local_df[col + '_ab_rep'])
+
+    temp = pd.DataFrame(
+        {'values_repeats': values_repeats,
+         'count_repeats': count_repeats,
+         'starttime':starttime ,
+         "endtime": endtime,
+         "pol_name": col,
+         'station_name': filename
+        })
+#     import pdb; pdb.set_trace()
+    with open('HTMLS/' + str(filename) + ".html", 'a') as f:
+        f.write(temp.sort_values(by=['count_repeats'], ascending = False)[:5].to_html())
+#     temp.to_csv('absolute_repeats.csv', mode='a', index=False, header=False)
+    unchanged[col + '_ab_rep'] = local_df[col + '_ab_rep']
+    return unchanged
 
 
 
-    return df3
+def group_plot(only_plots, local_df, col, label,station_name,filename, st_no):
+#     print("group_plot")
 
-def return_mean(df, col, station_name, st_no):
-    return [df[col + '_clean'].mean(), df[col + '_clean_outliers'].mean(), df[col].mean(), col, station_name, st_no]
+    df_temp = find_repeats(local_df, col)
+    df_temp = find_abs_rep(df_temp, col, filename)
+    df = find_local_outliers(df_temp, col)
 
-def return_count(true_df,station_name,st_no, col):
-    #output of counts from copy
-    list1 = [true_df[col + '_clean'].count(), true_df[col+'_clean_outliers'].count(),
-             true_df[col].count(),  true_df['dates'].count(), station_name,st_no, col]
-    import csv
-    with open("percent_new_with_outlier.csv", "a", newline='') as fp:
-        wr = csv.writer(fp, dialect='excel')
-        wr.writerow(list1)
-    return
 
-def group_plot(only_plots, local_df, col, label,station_name,st_no):
-
-    df_temp = rolling_remove_consecutives(local_df, col)
-    df_temp = find_abs_rep(df_temp, col, station_name)
-    df = clean_MAD_outlier_running(df_temp,local_df, col)
-
-    lst = [df_temp[col + '_clean'].mean(), df[col + '_clean_outliers'].mean(), df_temp[col].mean(), col, station_name, st_no]
-
-    with open("mean_variation.csv", "a", newline='') as fp:
-        wr = csv.writer(fp, dialect='excel')
-        wr.writerow(lst)
-
-    lst = [df_temp[col + '_clean'].count(), df[col + '_clean_outliers'].count(), df_temp[col].count(),  df_temp['dates'].count(), col, station_name, st_no]
-
-    with open("count_variation.csv", "a", newline='') as fp:
-        wr = csv.writer(fp, dialect='excel')
-        wr.writerow(lst)
 
     #Plot the results
     fig = go.Figure()
@@ -182,14 +231,15 @@ def group_plot(only_plots, local_df, col, label,station_name,st_no):
     fig.update_layout(legend= {'itemsizing': 'constant'}, template = "simple_white")
     fig.update_layout(legend=dict(yanchor="top",xanchor="left"))
 
-    figures_to_html_app([fig], station_name+ '.html')
+    figures_to_html_app([fig], filename+'.html')
 
     true_df = local_df.copy(deep=True)
     true_df[col+'_clean'] = df_temp[col+'_clean']
     true_df[col+'_clean_outliers'] =df[col+'_clean_outliers']
+    """
+    Plots the diurnal curve before and after cleaning
 
-    return_count(true_df, station_name,st_no, col)
-
+    """
     fig, ax = plt.subplots()
     df = true_df
     get_diurnal(df, col + '_clean', 'blue', 'title', ax)
@@ -204,7 +254,92 @@ def group_plot(only_plots, local_df, col, label,station_name,st_no):
     plt.xlabel("Hours")
     plt.ylabel(str(yaxis_title))
 
-    write_html_fig(fig, station_name)
+    write_html_fig(fig, filename)
 
 
     return true_df
+
+
+def correct_unit_inconsistency(df):
+    "Converts the unit if found inconsistent with CPCB Unit reporting paramater"
+    local_df = df.copy(deep =True)
+    df['dates']=pd.to_datetime(df['dates'], format="%Y-%m-%d %H:%M")
+    df['NOx'] =  pd.to_numeric(df.NOx, errors='coerce')
+    df['NO_clean'] =  pd.to_numeric(df.NO_clean_outliers, errors='coerce')
+    df['NO2_clean'] =  pd.to_numeric(df.NO2_clean_outliers, errors='coerce')
+    df['NOx_clean'] =  pd.to_numeric(df.NOx_clean_outliers, errors='coerce')
+    df = df[df['NO_clean'].notna()]
+    df = df[df['NO2_clean'].notna()]
+    df = df[df['NOx_clean'].notna()]
+
+    X = df['NOx_clean']
+    X2 = df['NOx_clean']*1/1.88
+    Y1 = df["NO2_clean"] + df["NO_clean"]
+    Y2 = (df["NO2_clean"]*1/1.88) + (df["NO_clean"]*1/1.23)
+    Y3 =(df["NO2_clean"]*1/1.88) + (df["NO_clean"])
+
+
+    local_df['ratio'] = (local_df['NO'] + local_df['NO2'])/df['NOx']
+    local_df['score'] = local_df['ratio'].apply(unit_class)
+
+    df['ratio'] = (df['NO'] + df['NO2'])/df['NOx']
+    df['score'] = df['ratio'].apply(unit_class)
+
+    fig, ax = plt.subplots()
+
+    TEMP = local_df[local_df['score'] != 'yellow']
+
+    ax.scatter(TEMP['NOx'], (TEMP["NO2"])*(1/1.88) + (TEMP["NO"])*(1/1.23), c = TEMP['score'].to_list())
+    ax.set_title("Before unit conversion")
+    ax.set_xlabel("NO" + '$_{X}$'+ '[ppb]')
+    ax.set_ylabel("NO" + '$_{2}$'+ '+ NO [ppb]')
+    line = mlines.Line2D([0, 1], [0, 1], color='red')
+    ax.add_line(line)
+    transform = ax.transAxes
+    line.set_transform(transform)
+
+    # Combine all the operations and display
+
+    plt.show(block=False)
+
+    options = ['C1', 'C2', 'M', '0']
+
+    user_input = ''
+
+    input_message = "Pick an option, pick M for mixed:\n"
+
+    for index, item in enumerate(options):
+        input_message += f'{index+1}) {item}\n'
+
+    input_message += 'Your choice: '
+    user_input = input(input_message)
+    print('You picked: ' + user_input)
+    if (user_input == 'C1'):
+        local_df = convert_to_micro(local_df)
+
+    elif(user_input == 'C2'):
+        local_df = retain_as_micro(local_df)
+
+    elif(user_input == 'M'):
+        local_df = convert_cluster_wise(local_df)
+        TEMP = local_df[local_df['score'] != 'yellow']
+        TEMP.groupby(['score']).count().plot(kind='pie', y='NOx_std', colors = ['blue', 'red', 'yellow', 'violet'],
+                                                 labels = ['case 2', 'case 1', 'No data', 'case 3'])
+
+
+    fig, ax = plt.subplots()
+
+    ax.scatter(TEMP['NOx_std'], (TEMP["NO2_std"])*(1/1.88) + (TEMP["NO_std"])*(1/1.23), c = TEMP['score'].to_list())
+    line = mlines.Line2D([0, 1], [0, 1], color='red')
+    ax.add_line(line)
+    transform = ax.transAxes
+    line.set_transform(transform)
+    ax.set_title("After unit conversion")
+    ax.set_xlabel("NO" + '$_{X}$'+ ' [ppb]')
+    ax.set_ylabel("NO" + '$_{2}$'+ '+ NO [ppb]')
+
+    plt.show()
+
+
+
+    return local_df

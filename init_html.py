@@ -1,3 +1,5 @@
+
+"Helps in initiating the HTML for each analysis"
 def start_html(station_name):
 
 

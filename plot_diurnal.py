@@ -6,7 +6,10 @@ Get grouped returns the column with confidence interval with lower and upper bou
 
 import pandas as pd
 import numpy as np
-
+"""
+Plots diurnal curve for pollutant
+Upper and lower boundaries denotes confidence interval (95%)
+"""
 def get_grouped(df, col):
     df_grouped = (df[[col]].groupby(df['dates'].dt.hour).agg(['mean', 'std', 'count']))
     df_grouped = df_grouped.droplevel(axis=1, level=0).reset_index()
