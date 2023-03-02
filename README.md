@@ -1,18 +1,24 @@
 # AirPy
 
-Installation
-pip install virtualenv
-Install virtualenv
-pip install virtualenv
+## Intructions to install AirPy:
 
-Move into Scripts directory
-cd C:\Python27\Scripts
-Create a virtual env.
-python virtualenv.exe my_env
-Activate the virtual env.
-my_env\Scripts\activate.bat
-Deactivate the virtual env.
-my_env\Scripts\deactivate.bat
+1. Install the Python 3.7 version from `https://www.python.org/ftp/python/3.7.3/python-3.7.3-amd64.exe`
+
+2. Enter `cmd` in windows search and open the command prompt
+
+3. Navigate to the working directory by entering `cd C:***\AirPy-main` in cmd
+
+4. In cmd:
+    `pip install virtualenv`
+    `pip install --upgrade pip`
+    `virtualenv venv --python=python3.7`
+    `venv\Scripts\activate`    
+    `pip install -r "C:***\AirPy-main\requirements.txt"`
+    
+5. To open AirPy
+    `jupyter notebook` or 'python -m IPython notebook`
+  
+
 
 
 Allowed input file formats:
