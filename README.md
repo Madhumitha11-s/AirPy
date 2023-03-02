@@ -1,5 +1,20 @@
 # AirPy
 
+Installation
+pip install virtualenv
+Install virtualenv
+pip install virtualenv
+
+Move into Scripts directory
+cd C:\Python27\Scripts
+Create a virtual env.
+python virtualenv.exe my_env
+Activate the virtual env.
+my_env\Scripts\activate.bat
+Deactivate the virtual env.
+my_env\Scripts\deactivate.bat
+
+
 Allowed input file formats:
 Unprocessed CPCB outputs (for one site and not  multiple site comparison data)
 ![image](https://user-images.githubusercontent.com/79834018/215360047-c1b3756d-5a3f-47e3-bc27-c0360762e5c2.png)
