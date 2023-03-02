@@ -85,18 +85,43 @@ def clean_dataset(year, main_directory, mixed_unit_identification):
             local_df = correct_unit_inconsistency(local_df,filename, mixed_unit_identification)
             del local_df['score']
             for name in lst:
-                del  local_df[name + '_outliers'], local_df[name + '_consecutives']
+                del  local_df[name + '_outliers'], local_df[name + '_consecutives'], local_df[name + 'consecutives'],local_df[name + '_int']
         except:
             import pdb; pdb.set_trace()
             print(colored("----------------------------------------------------------------------------------------", 'red', attrs=['bold']))
             print(colored('error in unit identification for' + name + " " + station_name,  'red', attrs=['bold']))
             print(colored("----------------------------------------------------------------------------------------", 'red', attrs=['bold']))
 
-            pass
+            
+        try:
+            
+            local_df = local_df[local_df.columns.drop(list(local_df.filter(regex='_outliers')))]
+            local_df = local_df[local_df.columns.drop(list(local_df.filter(regex='_consecutives')))]
+            local_df = local_df[local_df.columns.drop(list(local_df.filter(regex='_int')))]
+            local_df = local_df[local_df.columns.drop(list(local_df.filter(regex='consecutives')))]
+            local_df = local_df[local_df.columns.drop(list(local_df.filter(regex='_outliers')))]
+            local_df = local_df[local_df.columns.drop(list(local_df.filter(regex='med')))]
+            local_df = local_df[local_df.columns.drop(list(local_df.filter(regex='std')))]
+            local_df = local_df[local_df.columns.drop(list(local_df.filter(regex='t')))]
 
+
+        except:
+
+            print(colored("----------------------------------------------------------------------------------------", 'red', attrs=['bold']))
+            print(colored('Unable to delete unnecessary data' + " " + station_name,  'red', attrs=['bold']))
+            print(colored("----------------------------------------------------------------------------------------", 'red', attrs=['bold']))
+
+            
+            pass
+        
         local_df.to_csv(str("After_Cleaning\\") + str(station_name) +'_'+ str(year)+ ".csv")
 
         print(colored("----------------------------------------------------------------------------------------", 'green', attrs=['bold']))
         print(colored('saved successfully for'  + station_name,  'green', attrs=['bold']))
         print(colored("----------------------------------------------------------------------------------------", 'green', attrs=['bold']))
+        
+
+
+        
+        
 

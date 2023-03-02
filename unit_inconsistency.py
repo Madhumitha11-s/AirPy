@@ -7,9 +7,20 @@ import csv
 import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
 import matplotlib.pyplot as plt
-from sklearn.metrics import mean_squared_error
+# from sklearn.metrics import mean_squared_error
 
-
+def mean_squared_error(actual, predicted):
+    """
+    function returns mean_squared_error
+    """
+    
+    actual = np.array(actual)
+    predicted = np.array(predicted)
+    differences = np.subtract(actual, predicted)
+    squared_differences = np.square(differences)
+    return squared_differences.mean()
+        
+        
 """
 Returns a unique LABEL for each color
 
@@ -33,8 +44,8 @@ def color_to_case(argument):
 
     switcher = {"red": "Case 1 (NO: ppb; NO2: ppb; NOx: ppb)",
                 "blue": "Case 2 (CPCB Standards: NO: µg m-3; NO2: µg m-3; NOx: ppb)",
-                "green": "Case 3 (NO:µg m-3; NO2: ppb; NOx: µg m-3)",
-                "violet": "Case 4 (NO:µg m-3; NO2: ppb; NOx: µg m-3)"}
+                "violet": "Case 3 (NO:µg m-3; NO2: ppb; NOx: µg m-3)",
+                "green": "Case 4 (NO:µg m-3/ppb; NO2: ppb; NOx: µg m-3/ppb)"}
     return switcher.get(argument, "nothing")
 
 
